@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+    <style>
+        body {
+            margin: unset;
+        }
+
+        .screen {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #field {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            width: 500px;
+            align-items: center;
+            height: 50vh;
+            border: 2px solid #d3d3d3;
+            background-color: #e8e8e8;
+        }
+        
+        #field_1 {
+            display: flex;
+            width: 350px;
+            height: 35vh;
+            outline: 2px solid #d3d3d3;
+            background-color: #f1f1f7;
+            z-index: 10;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #field_2 {
+            width: 200px;
+            height: 20vh;
+            outline: 2px solid #d3d3d3;
+            background-color: white;
+            z-index: 20;
+        }
+
+        #joy_stick {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            cursor: move;
+            width: 50px;
+            height: 50px;
+            outline: 3px solid #d3d3d3;
+            background-color: #2196F3;
+            border-radius: 50%;
+        }
+        
+        #container_connected {
+            position: fixed;
+            top: 10%;
+            right: 25%;
+            background-color: #ff2511;
+            border: 2px solid #d3d3d3;
+            border-radius: 100%;
+            padding: 2px;
+        }
+        
+        #container_connected > p {
+            color: white;
+        }
+    </style>
+    <body>
+        <div class="screen">
+            <div id="field">
+                <div id="field_1">
+                    <div id="field_2">
+                        <div id="joy_stick"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="container_connected">
+            <p>Connected</p>
+        </div>
+        
+        <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+				const joyStick = document.getElementById('joy_stick');
+                const field = document.getElementById('field');
+                var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+                let current_speed = 100;
+                let socket = io.connect(window.location.href);
+                let indicator = document.getElementById('container_connected');
+                
+                socket.on('connect', function(){
+                    indicator.style.backgroundColor = '#008000';
+                    console.log('Connected!');
+                });
+                
+                socket.on('disconnect', function() {
+					indicator.style.backgroundColor = '#ff2511';
+                    console.log('Disconnected!');
+                    
+                    socket.disconnect();
+				});
+
+                joyStick.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+
+                    const touch = event.touches[0] || event.changedTouches[0];
+                    pos3 = touch.clientX;
+                    pos4 = touch.clientY;
+                });
+
+                joyStick.addEventListener('touchmove', function(e) {
+                    e.preventDefault();
+
+                    const touch = event.touches[0] || event.changedTouches[0];
+                    pos1 = pos3 - touch.clientX;
+                    pos2 = pos4 - touch.clientY;
+                    pos3 = touch.clientX;
+                    pos4 = touch.clientY;
+
+                    positionY = joyStick.offsetTop - pos2;
+                    positionX = joyStick.offsetLeft - pos1;
+                    
+                    if( positionY <= 0 ) {
+						positionY = 0;
+                        
+                        if( socket.connected ) {
+                            socket.emit('controller', {
+                                direction: 'forward',
+                                speed: current_speed
+                            });
+                        }
+                    }
+                    if( positionY >= field.clientHeight ) {
+                        positionY = field.clientHeight;
+
+                        if( socket.connected ) {
+                            socket.emit('controller', {
+                                direction: 'backward',
+                                speed: current_speed
+                            });
+                        }
+                    }
+                    if( positionX <= 0 ) {
+                        positionX = 0;
+                        
+                        if( socket.connected ) { 
+                            socket.emit('controller', {
+                                direction: 'left',
+                                speed: current_speed
+                            });
+                        }
+                    }
+                    if( positionX >= field.clientWidth ) {
+                        positionX = field.clientWidth;
+
+                        if( socket.connected ) { 
+                            socket.emit('controller', {
+                                direction: 'right',
+                                speed: current_speed
+                            });
+                        }
+                    }
+                    
+                    joyStick.style.top = (positionY) + "px";
+                    joyStick.style.left = (positionX) + "px";
+                });
+                
+                joyStick.addEventListener('touchend', function() {
+                    joyStick.style.top = "50%";
+                    joyStick.style.left = "50%";
+                    
+                    if( socket.connected ) {
+						socket.emit('controller', {
+							direction: 'stop',
+							speed: 0
+						});
+					}
+                });
+                
+                joyStick.onmousedown = function(e) {
+                    e = e || window.event;
+                    e.preventDefault();
+                    pos3 = e.clientX;
+                    pos4 = e.clientY;
+
+                    document.onmouseup = function() {
+                        document.onmouseup = null;
+                        document.onmousemove = null;
+                        joyStick.style.top = "50%";
+                        joyStick.style.left = "50%";
+                        
+                        if( socket.connected ) {
+							socket.emit('controller', {
+								direction: 'stop',
+								speed: 0
+							});
+						}
+                    }
+                    
+                    document.onmousemove = function(e) {
+                        e = e || window.event;
+                        e.preventDefault();
+                        pos1 = pos3 - e.clientX;
+                        pos2 = pos4 - e.clientY;
+                        pos3 = e.clientX;
+                        pos4 = e.clientY;
+
+                        positionY = joyStick.offsetTop - pos2;
+                        positionX = joyStick.offsetLeft - pos1;
+                        
+                        if( positionY <= 0 ) {
+                            positionY = 0;
+                            
+                            if( socket.connected ) { 
+                                socket.emit('controller', {
+                                    direction: 'forward',
+                                    speed: current_speed
+                                });
+                            }
+                        }
+                        if( positionY >= field.clientHeight ) {
+                            positionY = field.clientHeight;
+                            
+                            if( socket.connected ) { 
+                                socket.emit('controller', {
+                                    direction: 'backward',
+                                    speed: current_speed
+                                });
+                            }
+                        }
+
+                        if( positionX <= 0 ) {
+                            positionX = 0;
+                            
+                            if( socket.connected ) { 
+                                socket.emit('controller', {
+                                    direction: 'left',
+                                    speed: current_speed
+                                });
+                            }
+                        }
+                        if( positionX >= field.clientWidth ) {
+                            positionX = field.clientWidth;
+                            
+                            if( socket.connected ) { 
+                                socket.emit('controller', {
+                                    direction: 'right',
+                                    speed: current_speed
+                                });
+                            }
+                        }
+                        
+                        joyStick.style.top = (positionY) + "px";
+                        joyStick.style.left = (positionX) + "px";
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>
